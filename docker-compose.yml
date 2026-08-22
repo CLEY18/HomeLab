@@ -1,0 +1,150 @@
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────
+  postgres:
+      image: pgvector/pgvector:pg16
+      restart: unless-stopped
+      stop_signal: SIGINT
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 5s
+      environment:
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: ${POSTGRES_DB}
+        PGDATA: /var/lib/postgresql/data/pgdata
+      volumes:
+        - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/data
+        - ${POSTGRES_APP_PATH}:/etc/postgresql
+        - ${POSTGRES_INIT_SQL_PATH}:/docker-entrypoint-initdb.d/init.sql
+      command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+      ports: ["5432:5432"]
+      networks: [workspace]
+
+  # ─── Redis ──────────────────────────────────────────────
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [workspace]
+
+  # ─── Nginx Proxy Manager ────────────────────────────────
+  nginx-proxy-manager:
+      image: jc21/nginx-proxy-manager:latest
+      restart: unless-stopped
+      depends_on:
+        postgres:
+          condition: service_healthy
+      ports:
+        - "80:80"
+        - "443:443"
+        - "81:81"
+      environment:
+        DB_POSTGRES_HOST: postgres
+        DB_POSTGRES_PORT: 5432
+        DB_POSTGRES_USER: ${POSTGRES_USER}
+        DB_POSTGRES_PASSWORD: ${DB_PASS}
+        DB_POSTGRES_NAME: ${NPM_DB}
+        INITIAL_ADMIN_EMAIL: ${NPM_INITIAL_ADMIN_EMAIL}
+        INITIAL_ADMIN_PASSWORD: ${NPM_INITIAL_ADMIN_PASSWORD}
+      volumes:
+        - ${NPM_DATA_PATH}/data:/data
+        - ${NPM_DATA_PATH}/letsencrypt:/etc/letsencrypt
+      networks: [workspace]
+
+# ─── Nextcloud ───────────────────────────────────────────────
+  nextcloud:
+    image: nextcloud:apache
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${NEXTCLOUD_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_HOST_PORT: 6379
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+    volumes:
+      - ${NEXTCLOUD_APP_PATH}:/var/www/html
+      - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
+    ports: ["8082:8082"]
+    networks: [workspace]
+
+  nextcloud-cron:
+    image: nextcloud:apache
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    entrypoint: /cron.sh
+    volumes:
+      - ${NEXTCLOUD_APP_PATH}:/var/www/html
+      - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
+    networks: [workspace]
+
+  # ─── Vaultwarden (Password Manager) ────────────────────
+  vaultwarden:
+    image: vaultwarden/server:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${VAULTWARDEN_DOMAIN}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${DB_PASS}@postgres:5432/${VAULTWARDEN_DB}
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
+      DATA_FOLDER: /config
+      RSA_KEY_FILENAME: /config/rsa_key
+      ICON_CACHE_FOLDER: /config/icon_cache
+      ATTACHMENTS_FOLDER: /data/attachments
+      SENDS_FOLDER: /data/sends
+    volumes:
+      - ${VAULTWARDEN_APP_PATH}:/config
+      - ${VAULTWARDEN_DATA_PATH}/attachments:/data/attachments
+      - ${VAULTWARDEN_DATA_PATH}/sends:/data/sends
+    ports: ["8089:8089"]
+    networks: [workspace]
+
+# ─── Kavita (Books/Manga/Comics Server) ────────────────
+  kavita:
+    image: jvmilazz0/kavita:latest
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - ${KAVITA_APP_PATH}:/kavita/config
+      - ${KAVITA_DATA_PATH}:/library
+    ports: ["5001:5001"]
+    networks: [workspace]
+
+  # ─── Wealthfolio (Portfolio Tracker) ───────────────────
+  wealthfolio:
+    image: wealthfolio/wealthfolio:latest
+    restart: unless-stopped
+    environment:
+      WF_LISTEN_ADDR: 0.0.0.0:8088
+      WF_DB_PATH: /data/wealthfolio.db
+      WF_SECRET_KEY: ${WF_SECRET_KEY}
+      WF_AUTH_PASSWORD_HASH: ${WF_AUTH_PASSWORD_HASH}
+      WF_CORS_ALLOW_ORIGINS: ${WF_CORS_ALLOW_ORIGINS}
+    volumes:
+      - ${WEALTHFOLIO_DATA_PATH}:/data
+    ports: ["8088:8088"]
+    networks: [workspace]
