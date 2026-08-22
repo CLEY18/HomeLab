@@ -148,3 +148,7 @@ services:
       - ${WEALTHFOLIO_DATA_PATH}:/data
     ports: ["8088:8088"]
     networks: [workspace]
+
+networks:
+  workspace:
+    driver: bridge
