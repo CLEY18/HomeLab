@@ -50,7 +50,7 @@ services:
         DB_POSTGRES_HOST: postgres
         DB_POSTGRES_PORT: 5432
         DB_POSTGRES_USER: ${POSTGRES_USER}
-        DB_POSTGRES_PASSWORD: ${DB_PASS}
+        DB_POSTGRES_PASSWORD: ${POSTGRES_DB}
         DB_POSTGRES_NAME: ${NPM_DB}
         INITIAL_ADMIN_EMAIL: ${NPM_INITIAL_ADMIN_EMAIL}
         INITIAL_ADMIN_PASSWORD: ${NPM_INITIAL_ADMIN_PASSWORD}
@@ -106,7 +106,7 @@ services:
         condition: service_healthy
     environment:
       DOMAIN: ${VAULTWARDEN_DOMAIN}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${DB_PASS}@postgres:5432/${VAULTWARDEN_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_DB}@postgres:5432/${VAULTWARDEN_DB}
       ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
       DATA_FOLDER: /config
       RSA_KEY_FILENAME: /config/rsa_key
