@@ -1,3 +1,7 @@
+# sudo groupadd -g 2000 data
+# sudo chgrp -R 2000 ../data
+# sudo chmod -R 2775 ../data
+
 services:
   # ─── PostgreSQL ────────────────────────────────────────────
   postgres:
@@ -94,6 +98,8 @@ services:
       REDIS_HOST_PORT: 6379
       NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
       NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+    group_add:
+      - "2000"
     volumes:
       - ${NEXTCLOUD_APP_PATH}:/var/www/html
       - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
@@ -109,6 +115,8 @@ services:
       redis:
         condition: service_healthy
     entrypoint: /cron.sh
+    group_add:
+      - "2000"
     volumes:
       - ${NEXTCLOUD_APP_PATH}:/var/www/html
       - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
