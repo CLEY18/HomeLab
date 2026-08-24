@@ -97,7 +97,7 @@ services:
     volumes:
       - ${NEXTCLOUD_APP_PATH}:/var/www/html
       - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
-    ports: ["8082:8082"]
+    ports: ["8082:80"]
     networks: [workspace]
 
   nextcloud-cron:
