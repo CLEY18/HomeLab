@@ -76,7 +76,7 @@ services:
         - ${NPM_DATA_PATH}/letsencrypt:/etc/letsencrypt
       networks: [workspace]
 
-# ─── Nextcloud ───────────────────────────────────────────────
+  # ─── Nextcloud ───────────────────────────────────────────────
   nextcloud:
     image: nextcloud:apache
     restart: unless-stopped
@@ -141,7 +141,7 @@ services:
     ports: ["8089:8089"]
     networks: [workspace]
 
-# ─── Kavita (Books/Manga/Comics Server) ────────────────
+  # ─── Kavita (Books/Manga/Comics Server) ────────────────
   kavita:
     image: jvmilazz0/kavita:latest
     restart: unless-stopped

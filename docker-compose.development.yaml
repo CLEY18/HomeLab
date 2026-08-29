@@ -1,1 +1,32 @@
-services: {}
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────
+  postgres:
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # ─── Jupyter ───────────────────────────────────────────────
+  jupyter:
+    image: quay.io/jupyter/pytorch-notebook:cuda12-latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN}
+      NOTEBOOK_ARGS: --ServerApp.root_dir=/home/jovyan/work
+      POSTGRES_CONNECTION_STRING: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${JUPYTER_DB}
+    volumes:
+     # - ${JUPYTER_APP_PATH}:/home/jovyan # Commented out for WSL
+      - ${JUPYTER_DATA_PATH}:/home/jovyan/work
+    ports: ["8888:8888"]
+    networks: [workspace]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  pgdata:

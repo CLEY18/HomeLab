@@ -3,6 +3,7 @@
 CREATE DATABASE npm;
 CREATE DATABASE nextcloud;
 CREATE DATABASE vaultwarden;
+CREATE DATABASE jupyter;
 
 -- ─── Workspace db extensions ─────────────────────────────
 \c workspace
