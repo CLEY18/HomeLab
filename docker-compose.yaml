@@ -92,13 +92,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
       REDIS_HOST_PORT: 6379
-      PHP_UPLOAD_LIMIT: 256G
-      PHP_MEMORY_LIMIT: 1G
       NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
       NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
       NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
     volumes:
-      - ./nextcloud-apache-timeout.conf:/etc/apache2/conf-enabled/timeout.conf
       - ${NEXTCLOUD_APP_PATH}:/var/www/html
       - ${NEXTCLOUD_DATA_PATH}:/var/www/html/data
     ports: ["8082:80"]
