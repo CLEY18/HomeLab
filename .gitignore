@@ -1,3 +1,6 @@
+data/*
+docker/*
+
 .env
 .env.development
 .env.old
