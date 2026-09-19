@@ -148,6 +148,7 @@ services:
       TZ: ${TZ:-Europe/Kyiv}
     volumes:
       - ${KAVITA_APP_PATH}:/kavita/config
+      - ${KAVITA_BACKUP_PATH}:/kavita/backups
       - ${KAVITA_DATA_PATH}:/library
     ports: ["5001:5001"]
     networks: [workspace]
