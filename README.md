@@ -1,5 +1,24 @@
 # HomeLab
 
+## Directory Conventions (APP_PATH / DATA_PATH)
+
+Every service exposes its state through env variables, and the location follows
+**ownership**:
+
+- `*_APP_PATH` → `./docker/<service>/` — **service-owned** files: configuration, generated keys/credentials, logs, indexes and other runtime state. Required for the service to run, but not user data.
+- `*_DATA_PATH` → `./data/db/<service>/` (or `./data/storage/...` for large user files) — **user content**: uploads, content generated for the user, database data.
+
+Both trees are gitignored. Only committed config templates live in the repo, in a service-named folder next to the compose file (e.g. ` /librechat/librechat.yaml`, values via `${VAR}` from `.env` only).
+
+Splitting a new service:
+
+1. Find where the image keeps its state.
+2. Classify each directory by owner — user content → `DATA_PATH`; service-owned (config, keys, logs, derived indexes) → `APP_PATH`.
+3. If the product keeps all state in one storage directory with no config/data split, declare only `*_DATA_PATH` — an empty `APP_PATH` is structure theater, not structure.
+4. Never put secrets in the repo, and never user data into `docker/`.
+
+---
+
 ## Configuring Services 
 
 ### PostgreSQL
