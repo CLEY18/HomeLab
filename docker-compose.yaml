@@ -263,6 +263,8 @@ services:
       MONGO_URI: mongodb://${MONGO_USER}:${PASSWORD_URLENC}@mongodb:27017/${LIBRECHAT_DB}?authSource=admin
       DOMAIN_CLIENT: ${LIBRECHAT_DOMAIN}
       DOMAIN_SERVER: ${LIBRECHAT_DOMAIN}
+      # v0.8.8 treats unset as disabled; first registered user bootstraps ADMIN
+      ALLOW_REGISTRATION: "true"
       CREDS_KEY: ${LIBRECHAT_CREDS_KEY}
       CREDS_IV: ${LIBRECHAT_CREDS_IV}
       JWT_SECRET: ${LIBRECHAT_JWT_SECRET}
