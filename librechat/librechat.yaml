@@ -8,9 +8,9 @@ endpoints:
       apiKey: "${LLM_API_KEY}"
       baseURL: "${LLM_BASE_URL}"
       models:
-# model list is fetched from the endpoint (/models); if fetch is
-      # unavailable, set default: ["<model-id>"] here
-        default: []
+        # placeholder: schema requires a non-empty fallback list; the live
+        # list is fetched from the endpoint's /models and replaces this
+        default: ["local-llm"]
         fetch: true
       titleConvo: true
       titleModel: "current_model"
