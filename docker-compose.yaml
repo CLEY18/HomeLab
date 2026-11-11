@@ -223,7 +223,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      STORAGE_DIR: /app/storage
+      # must stay /app/server/storage: uploads are staged in $STORAGE_DIR/../../collector/hotdir,
+      # any other path breaks document uploads (anything-llm issue #5152)
+      STORAGE_DIR: /app/server/storage
       VECTOR_DB: pgvector
       PGVECTOR_CONNECTION_STRING: postgresql://${POSTGRES_USER}:${PASSWORD_URLENC}@postgres:5432/${ANYTHINGLLM_DB}
       JWT_SECRET: ${ANYTHINGLLM_JWT_SECRET}
@@ -237,7 +239,7 @@ services:
       DISABLE_TELEMETRY: "true"
       TZ: ${TZ:-Europe/Kyiv}
     volumes:
-      - ${ANYTHINGLLM_DATA_PATH}:/app/storage
+      - ${ANYTHINGLLM_DATA_PATH}:/app/server/storage
     ports: ["8083:3001"]
     networks: [workspace]
 
@@ -248,6 +250,8 @@ services:
     profiles: ["ai"]
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       meilisearch:
         condition: service_started
@@ -263,6 +267,10 @@ services:
       CREDS_IV: ${LIBRECHAT_CREDS_IV}
       JWT_SECRET: ${LIBRECHAT_JWT_SECRET}
       JWT_REFRESH_SECRET: ${LIBRECHAT_JWT_REFRESH_SECRET}
+      USE_REDIS: "true"
+      REDIS_URI: redis://redis:6379
+      # key prefix isolates LibreChat from nextcloud keys in the shared redis
+      REDIS_KEY_PREFIX: librechat
       SEARCH: "true"
       MEILI_HOST: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
