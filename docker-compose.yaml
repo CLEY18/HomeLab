@@ -236,8 +236,10 @@ services:
       EMBEDDING_ENGINE: localai
       EMBEDDING_BASE_PATH: ${EMBEDDINGS_BASE_URL:-${LLM_BASE_URL}}
       EMBEDDING_MODEL_PREF: ${EMBEDDINGS_MODEL}
+      LOCAL_AI_MODEL_TOKEN_LIMIT: ${LLM_MODEL_TOKEN_LIMIT}
       DISABLE_TELEMETRY: "true"
       TZ: ${TZ:-Europe/Kyiv}
+    cap_add: [SYS_ADMIN]
     volumes:
       - ${ANYTHINGLLM_DATA_PATH}:/app/server/storage
     ports: ["8083:3001"]
