@@ -362,6 +362,40 @@ services:
     ports: ["8085:3100"]
     networks: [workspace]
 
+  # ─── aria2 + AriaNg (Download Manager) ─────────────────
+  aria2:
+    image: p3terx/aria2-pro:latest
+    restart: unless-stopped
+    environment:
+      PUID: "0"
+      PGID: "0"
+      RPC_SECRET: ${ARIA2_RPC_SECRET}   # REQUIRED: image default is "P3TERX"
+      RPC_PORT: "6800"
+      LISTEN_PORT: "6888"
+      DISK_CACHE: "64M"
+      UPDATE_TRACKERS: "true"
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - ${ARIA2_APP_PATH}:/config       # aria2.conf, session, scripts = APP state
+      - ${ARIA2_DATA_PATH}:/downloads   # downloaded files = user DATA
+    ports:
+      # BT/DHT only; RPC stays docker-network-only (proxied by NPM)
+      - "6888:6888"
+      - "6888:6888/udp"
+    networks: [workspace]
+    logging:
+      driver: json-file
+      options: { max-size: "1m" }
+
+  ariang:
+    image: p3terx/ariang:latest
+    restart: unless-stopped
+    command: ["--port", "6880"]         # darkhttpd flags; static AriaNg, no state
+    networks: [workspace]
+    logging:
+      driver: json-file
+      options: { max-size: "1m" }
+
 networks:
   workspace:
     driver: bridge
