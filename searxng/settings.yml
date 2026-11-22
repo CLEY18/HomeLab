@@ -1,0 +1,10 @@
+use_default_settings: true
+
+server:
+  limiter: false        # LAN-only instance; API clients must not be rate-limited
+  public_instance: false
+
+search:
+  formats:
+    - html
+    - json

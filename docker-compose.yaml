@@ -29,7 +29,6 @@ services:
         condition: service_healthy
     environment:
       POSTGRES_HOST: postgres
-      # All databases (space-separated): without this only ${POSTGRES_DB} is backed up
       POSTGRES_DB: ${POSTGRES_DB} ${NPM_DB} ${NEXTCLOUD_DB} ${VAULTWARDEN_DB} ${PAPERCLIP_DB} ${ANYTHINGLLM_DB} ${LIBRECHAT_RAG_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -93,6 +92,27 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks: [workspace]
+
+  # ─── RabbitMQ (shared message broker) ──────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: firecrawl
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - ${RABBITMQ_DATA_PATH}:/var/lib/rabbitmq
+    ports: ["15672:15672"]   # management UI; AMQP (5672) stays workspace-only
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks: [workspace]
 
   # ─── Nginx Proxy Manager ────────────────────────────────
@@ -214,6 +234,40 @@ services:
     ports: ["8088:8088"]
     networks: [workspace]
 
+  # ─── aria2 + AriaNg (Download Manager) ─────────────────
+  aria2:
+    image: p3terx/aria2-pro:latest
+    restart: unless-stopped
+    environment:
+      PUID: "0"
+      PGID: "0"
+      RPC_SECRET: ${ARIA2_RPC_SECRET}   # REQUIRED: image default is "P3TERX"
+      RPC_PORT: "6800"
+      LISTEN_PORT: "6888"
+      DISK_CACHE: "64M"
+      UPDATE_TRACKERS: "true"
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - ${ARIA2_APP_PATH}:/config       # aria2.conf, session, scripts = APP state
+      - ${ARIA2_DATA_PATH}:/downloads   # downloaded files = user DATA
+    ports:
+      # BT/DHT only; RPC stays docker-network-only (proxied by NPM)
+      - "6888:6888"
+      - "6888:6888/udp"
+    networks: [workspace]
+    logging:
+      driver: json-file
+      options: { max-size: "1m" }
+
+  ariang:
+    image: p3terx/ariang:latest
+    restart: unless-stopped
+    command: ["--port", "6880"]         # darkhttpd flags; static AriaNg, no state
+    networks: [workspace]
+    logging:
+      driver: json-file
+      options: { max-size: "1m" }
+
   # ─── AnythingLLM (AI Chat) ─────────────────────────────
   anythingllm:
     image: mintplexlabs/anythingllm:latest
@@ -283,6 +337,9 @@ services:
       MEILI_NO_ANALYTICS: "true"
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
+      # consumed by the webSearch block in librechat.yaml (env substitution)
+      SEARXNG_INSTANCE_URL: http://searxng:8080
+      FIRECRAWL_API_URL: http://firecrawl:3002
       RAG_API_URL: http://rag_api:8000
       RAG_OPENAI_BASEURL: ${EMBEDDINGS_BASE_URL:-${LLM_BASE_URL}}
       RAG_OPENAI_API_KEY: ${EMBEDDINGS_API_KEY:-${LLM_API_KEY}}
@@ -362,39 +419,118 @@ services:
     ports: ["8085:3100"]
     networks: [workspace]
 
-  # ─── aria2 + AriaNg (Download Manager) ─────────────────
-  aria2:
-    image: p3terx/aria2-pro:latest
+  # ─── SearXNG (metasearch engine) ──────────
+  # Personal search start page in the browser
+  # JSON API (/search?format=json) for any client on the workspace/LAN network.
+  searxng:
+    image: searxng/searxng:latest
     restart: unless-stopped
     environment:
-      PUID: "0"
-      PGID: "0"
-      RPC_SECRET: ${ARIA2_RPC_SECRET}   # REQUIRED: image default is "P3TERX"
-      RPC_PORT: "6800"
-      LISTEN_PORT: "6888"
-      DISK_CACHE: "64M"
-      UPDATE_TRACKERS: "true"
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
+      SEARXNG_SECRET: ${SEARXNG_SECRET}
       TZ: ${TZ:-Europe/Kyiv}
     volumes:
-      - ${ARIA2_APP_PATH}:/config       # aria2.conf, session, scripts = APP state
-      - ${ARIA2_DATA_PATH}:/downloads   # downloaded files = user DATA
-    ports:
-      # BT/DHT only; RPC stays docker-network-only (proxied by NPM)
-      - "6888:6888"
-      - "6888:6888/udp"
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports: ["8086:8080"]
     networks: [workspace]
-    logging:
-      driver: json-file
-      options: { max-size: "1m" }
 
-  ariang:
-    image: p3terx/ariang:latest
+  # ─── Firecrawl (scraping service) ────────
+  firecrawl:
+    image: ghcr.io/firecrawl/firecrawl:latest
     restart: unless-stopped
-    command: ["--port", "6880"]         # darkhttpd flags; static AriaNg, no state
+    profiles: ["ai"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      firecrawl-postgres:
+        condition: service_healthy
+      firecrawl-playwright:
+        condition: service_started
+    command: node dist/src/harness.js --start-docker
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3002"
+      ENV: local
+      USE_DB_AUTHENTICATION: "false"
+      # shared broker; the dedicated "firecrawl" vhost isolates its topology
+      NUQ_RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/firecrawl
+      # shared redis; db 2 isolates firecrawl's unprefixed queue keys
+      REDIS_URL: redis://redis:6379/2
+      REDIS_RATE_LIMIT_URL: redis://redis:6379/2
+      PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
+      POSTGRES_HOST: firecrawl-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${FIRECRAWL_DB_PASSWORD}
+      # the bundled pg_cron setup targets the "postgres" database
+      POSTGRES_DB: postgres
+      NUM_WORKERS_PER_QUEUE: "4"
+      CRAWL_CONCURRENT_REQUESTS: "6"
+      MAX_CONCURRENT_JOBS: "3"
+      BROWSER_POOL_SIZE: "3"
+      TZ: ${TZ:-Europe/Kyiv}
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     networks: [workspace]
-    logging:
-      driver: json-file
-      options: { max-size: "1m" }
+
+  firecrawl-playwright:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    restart: unless-stopped
+    profiles: ["ai"]
+    environment:
+      PORT: "3000"
+      MAX_CONCURRENT_PAGES: "6"
+      BLOCK_MEDIA: "true"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp/.cache:noexec,nosuid,size=1g
+    cpus: 2.0
+    mem_limit: 2g
+    networks: [workspace]
+
+  firecrawl-postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    restart: unless-stopped
+    profiles: ["ai"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${FIRECRAWL_DB_PASSWORD}
+      POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [workspace]
+
+  # ─── Playwright MCP (shared headless browser service) ──
+  playwright-mcp:
+    image: mcr.microsoft.com/playwright/mcp:latest
+    restart: unless-stopped
+    profiles: ["ai"]
+    init: true
+    entrypoint: node
+    command:
+      - /app/cli.js
+      - --headless
+      - --browser
+      - chromium
+      - --no-sandbox
+      - --isolated
+      - --port
+      - "8931"
+      - --host
+      - 0.0.0.0
+    # serve requests addressed by container name (DNS-rebinding host check)
+    environment:
+      PLAYWRIGHT_MCP_ALLOWED_HOSTS: "*"
+    ports: ["8931:8931"]
+    networks: [workspace]
 
 networks:
   workspace:

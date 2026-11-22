@@ -16,3 +16,37 @@ endpoints:
       titleModel: "current_model"
       dropParams: ["stop"]
       modelDisplayLabel: "Local LLM"
+webSearch:
+  searchProvider: searxng
+  searxngInstanceUrl: "http://searxng:8080"
+  scraperProvider: firecrawl
+  firecrawlApiUrl: "http://firecrawl:3002"
+  # Jina/Cohere rerankers need API keys - skip reranking entirely
+  rerankerType: none
+  # self-hosted providers are private destinations: the SSRF guard blocks
+  # them at connect time unless listed here as exact host:port pairs
+  allowedAddresses:
+    - "searxng:8080"
+    - "firecrawl:3002"
+  searxngSearchOptions:
+    # engines missing from the instance settings are silently skipped
+    engines:
+      - duckduckgo
+      - google
+      - bing
+      - brave
+      - startpage
+      - qwant
+    language: "all"
+    timeout: 20000
+# Shared headless browser exposed over MCP (playwright-mcp service in compose).
+mcpServers:
+  browser:
+    type: streamable-http
+    url: "http://playwright-mcp:8931/mcp"
+    # navigate + snapshot on heavy pages can exceed the 60s default
+    timeout: 120000
+mcpSettings:
+  # internal (docker-network) MCP hosts must be allowed explicitly
+  allowedAddresses:
+    - "playwright-mcp:8931"
